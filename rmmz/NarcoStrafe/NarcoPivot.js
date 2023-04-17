@@ -8,7 +8,7 @@
  *      tab, ok, shift, control, escape, pageup, pagedown, 
  *      left, up, right, down, debug
  * 
- *  See `rpg_core.js`, lines 3002-3047 to see how the keynames map to real keys
+ *  See `rmmz_core.js`, lines 5627-5670 to see how the keynames map to real keys
  * 
  * To disable pivot for a map, enter this in the Notes field for the map:
  * 
