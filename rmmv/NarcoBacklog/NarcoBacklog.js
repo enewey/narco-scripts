@@ -1,15 +1,18 @@
 /*:
- * @plugindesc Plugin that enables backlog of player messages with name display
+ * @plugindesc Plugin that enables backlog of in-game messages, with name display.
  * @author Erich Newey
  *
  * @help
  *
  * Plugin Command:
  *   NarcoBacklog open          # Open the backlog screen.
- *   NarcoBacklog on            # Record incoming messages to the backlog (On is the default state).
+ *   NarcoBacklog on            # Record incoming messages to the backlog 
+ *                                (On is the default state).
  *   NarcoBacklog off           # Stop recording incoming messages to the backlog.
- *   NarcoBacklog setName Bob   # Overrides the name recorded to be `Bob` until next portrait is drawn or cleared.
- *   NarcoBacklog clearName     # Clear the currently set name, recording the next messages as 'System'.
+ *   NarcoBacklog setName Bob   # Overrides the name recorded to be `Bob` until 
+ *                                next portrait is drawn or cleared.
+ *   NarcoBacklog clearName     # Clear the currently set name, recording the next 
+ *                                messages as 'System'.
  *   NarcoBacklog clear         # Erase all messages in the message backlog.
  * 
  * @param Portrait File Suffix
@@ -22,6 +25,23 @@
  *  1 will display backlog in reverse chronological order (most recent message first)
  *  0 will display backlog in chronological order (oldest message first)
  * @default 1
+ * 
+ * @param System Message Label
+ * @desc Customize how "system" (i.e. messages with no associated name) appear.
+ * @default System
+ * 
+ * @param Name Colors
+ * @desc Comma-separated list of names to color codes.
+ * Example: 
+ *    Alice:1,Bob:3,System:8
+ * Here, Alice's name will display in the backlog with the color `1`, i.e. as \c[1]Alice\c[0]:
+ * Bob will be color 3
+ * System will be color 8
+ * @default System:8
+ * 
+ * @param Default Name Color
+ * @desc Color code for names that do not appear in the "Name Colors" param.
+ * @default 6
 */
 
 var Narcodis = Narcodis || {};
@@ -29,8 +49,23 @@ Narcodis.BACKLOG = {};
 Narcodis.BACKLOG.Parameters = PluginManager.parameters('NarcoBacklog');
 Narcodis.BACKLOG.PortraitSuffix = String(Narcodis.BACKLOG.Parameters["Portrait File Suffix"]);
 Narcodis.BACKLOG.Reversed = Boolean(Number(Narcodis.BACKLOG.Parameters["Reverse Chronologically"]));
+Narcodis.BACKLOG.SystemLabel = String(Narcodis.BACKLOG.Parameters["System Message Label"]);
+Narcodis.BACKLOG.DefaultColorCode = Number(Narcodis.BACKLOG.Parameters["Default Name Color"]);
 
-// TODO: make this save as part of the game
+Narcodis.BACKLOG.ColorCodes = {}
+try {
+    Narcodis.BACKLOG.__name_split = Narcodis.BACKLOG.Parameters["Name Colors"].split(',');
+    for (var n of Narcodis.BACKLOG.__name_split) {
+        let s = n.split(':');
+        if (s.length != 2) {
+            throw "encountered bad name color code: " + s;
+        }
+        Narcodis.BACKLOG.ColorCodes[s[0]] = s[1];
+    }
+} catch (e) {
+    console.error("Error parsing Name Colors parameter", { error: e });
+}
+
 Narcodis.BACKLOG.$gameBacklog = null;
 
 (function() {
@@ -176,26 +211,27 @@ Scene_Narco_Backlog.prototype.create = function () {
 
     let messages = [];
 
-    let curr = [];
-    let name = Narcodis.BACKLOG.$gameBacklog.data()[0].name;
-    for (var msg of Narcodis.BACKLOG.$gameBacklog.data()) {
-        if (msg.name !== name) {
-            messages.push({ name: name, texts: [ ...curr ] })
-            name = msg.name
-            curr = [];
+    if (Narcodis.BACKLOG.$gameBacklog.data().length > 0) {
+        let curr = [];
+        let name = Narcodis.BACKLOG.$gameBacklog.data()[0].name;
+        for (var msg of Narcodis.BACKLOG.$gameBacklog.data()) {
+            if (msg.name !== name) {
+                messages.push({ name: name, texts: [ ...curr ] })
+                name = msg.name
+                curr = [];
+            }
+            curr.push(msg.message);
         }
-        curr.push(msg.message);
-    }
 
-    // get the last one
-    messages.push({ name: name, texts: [ ...curr ] })
+        // get the last one
+        messages.push({ name: name, texts: [ ...curr ] })
 
-    if (Narcodis.BACKLOG.Reversed) {
-        messages.reverse();
+        if (Narcodis.BACKLOG.Reversed) {
+            messages.reverse();
+        }
     }
 
     this._dataWindow = new Window_Narco_Backlog(0, 0, Graphics.boxWidth, Graphics.height, messages);
-    console.log({this: this});
     this.addWindow(this._dataWindow);
 };
 
@@ -216,6 +252,14 @@ Scene_Narco_Backlog.prototype.update = function () {
         this._dataWindow.addScroll(24);
         this._dataWindow.drawAllItems();
     }
+    if (Input.isTriggered("pageup") || Input.isLongPressed("pageup")) {
+        this._dataWindow.addScroll(-(Graphics.height));
+        this._dataWindow.drawAllItems();
+    }
+    if (Input.isTriggered("pagedown") || Input.isLongPressed("pagedown")) {
+        this._dataWindow.addScroll(Graphics.height);
+        this._dataWindow.drawAllItems();
+    }
 }
 
 // Window
@@ -231,14 +275,14 @@ Window_Narco_Backlog.prototype.initialize = function(_x,_y,_width,_height, messa
     Window_Base.prototype.initialize.apply(this, arguments);
     this._scroll = 0;
     this._messages = messages;
-
-    
+    this._messageGap = Math.trunc(this.lineHeight() / 2);
 
     // total lines = each texts.length + 1 each name
     let numLines = messages.reduce((acc, next) => acc += next.texts.length + 1, 0);
-    this._maxScroll = ((numLines + 2) * this.lineHeight()) - this._height;
-    console.log({ messages });
-    console.log({ numLines, maxScroll: this._maxScroll })
+    this._maxScroll = 
+        ((numLines + 1) * this.lineHeight()) + 
+        (this._messages.length * this._messageGap) -
+        (this._height);
 };
 
 Window_Narco_Backlog.prototype.addScroll = function(n) {
@@ -249,17 +293,24 @@ Window_Narco_Backlog.prototype.addScroll = function(n) {
 
 Window_Narco_Backlog.prototype.drawAllItems = function () {
     this.contents.clear();
-    let y = 0 - this._scroll;
+
+    let y = -this._messageGap - this._scroll;
     let name = "";
+    if (this._messages.length === 0) {
+        this.drawText("No messages to display.", 0, (this.height / 2) - this.lineHeight(), this.width - this.padding * 2, "center");
+        return;
+    }
+
     for (var msg of this._messages) {
         if (msg.name !== name) {
             name = msg.name
-            this.drawText(msg.name, 0, y, this.width - this.padding * 2, "left");
+            y += this._messageGap;
+            let color = (name in Narcodis.BACKLOG.ColorCodes) ? Narcodis.BACKLOG.ColorCodes[name] : Narcodis.BACKLOG.DefaultColorCode;
+            this.drawTextEx(`\\c[${color}]${msg.name}\\c[0]:`, 0, y);
             y += this.lineHeight();
         } 
-        for (var m of msg.texts) {
-            this.drawText(this.convertEscapeCharacters(m), 24, y, this.width - this.padding * 2, "left");
-            y += this.lineHeight();
-        }        
+        let joined = msg.texts.join("\n");
+        this.drawTextEx(joined, 24, y);
+        y += this.lineHeight() * msg.texts.length;     
     }
 };
