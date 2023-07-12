@@ -1,4 +1,5 @@
 /*:
+ * @target MZ
  * @plugindesc Plugin that enables button to allow player to strafe (fix direction while walking)
  * @author Erich Newey
  *

@@ -1,4 +1,5 @@
 /*:
+ * @target MZ
  * @plugindesc Plugin that enables button to allow player to pivot (turn without moving)
  * @author Erich Newey
  *
