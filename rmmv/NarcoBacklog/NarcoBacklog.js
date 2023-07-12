@@ -15,10 +15,11 @@
  *                                messages as 'System'.
  *   NarcoBacklog clear         # Erase all messages in the message backlog.
  * 
- * @param Portrait File Suffix
- * @desc Suffix of filenames use for portraits. 
- *  For example, with a file name "Doug_Portrait" and suffix "_Portrait", the character's name would be recognized as "Doug".
- * @default FutureTextbox
+ * @param Portrait File Suffixes
+ * @desc Suffixes of filenames use for portraits. 
+ *  For example, with file names "Doug_Portrait" and "Doug_OldPortrait" and suffixes "_Portrait,_OldPortrait", 
+ *  the character's name would be recognized as "Doug".
+ * @default Textbox,FutureTextbox
  * 
  * @param Reverse Chronologically
  * @desc Determines order that backlog is displayed.
@@ -47,14 +48,13 @@
 var Narcodis = Narcodis || {};
 Narcodis.BACKLOG = {};
 Narcodis.BACKLOG.Parameters = PluginManager.parameters('NarcoBacklog');
-Narcodis.BACKLOG.PortraitSuffix = String(Narcodis.BACKLOG.Parameters["Portrait File Suffix"]);
 Narcodis.BACKLOG.Reversed = Boolean(Number(Narcodis.BACKLOG.Parameters["Reverse Chronologically"]));
 Narcodis.BACKLOG.SystemLabel = String(Narcodis.BACKLOG.Parameters["System Message Label"]);
 Narcodis.BACKLOG.DefaultColorCode = Number(Narcodis.BACKLOG.Parameters["Default Name Color"]);
 
 Narcodis.BACKLOG.ColorCodes = {}
 try {
-    Narcodis.BACKLOG.__name_split = Narcodis.BACKLOG.Parameters["Name Colors"].split(',');
+    Narcodis.BACKLOG.__name_split = String(Narcodis.BACKLOG.Parameters["Name Colors"]).split(',');
     for (var n of Narcodis.BACKLOG.__name_split) {
         let s = n.split(':');
         if (s.length != 2) {
@@ -65,6 +65,28 @@ try {
 } catch (e) {
     console.error("Error parsing Name Colors parameter", { error: e });
 }
+
+Narcodis.BACKLOG.PortraitSuffixes = []
+try {
+    Narcodis.BACKLOG.PortraitSuffixes = 
+        String(Narcodis.BACKLOG.Parameters["Portrait File Suffixes"])
+        .split(',')
+        .map(s => s.trim())
+        .sort((a,b) => b.length-a.length);
+} catch (e) {
+    console.error("Error parsing Portrait Suffixes parameter", { error: e });
+}
+
+Narcodis.BACKLOG.ParseNameFromSuffixes = function(name) {
+    for (let i=0; i<Narcodis.BACKLOG.PortraitSuffixes.length; i++) {
+        let suffix = Narcodis.BACKLOG.PortraitSuffixes[i];
+        if (name.endsWith(suffix)) {
+            return name.substring(0, name.length - suffix.length);
+        }
+    }
+    return null;
+};
+
 
 Narcodis.BACKLOG.$gameBacklog = null;
 
@@ -79,9 +101,9 @@ Narcodis.BACKLOG.$gameBacklog = null;
     
     (function(alias) {
         Game_Screen.prototype.showPicture = function(pictureId, name, _origin, _x, _y, _scaleX, _scaleY, _opacity, _blendMode) {
-            if (name.endsWith(Narcodis.BACKLOG.PortraitSuffix)) {
-                var n = name.substring(0, name.length - Narcodis.BACKLOG.PortraitSuffix.length);
-                Narcodis.BACKLOG.$gameBacklog.set_current(pictureId, n);
+            let n = Narcodis.BACKLOG.ParseNameFromSuffixes(name)
+            if (n) { 
+                Narcodis.BACKLOG.$gameBacklog.set_current(pictureId, n); 
             }
             alias.apply(this, arguments);
         };
