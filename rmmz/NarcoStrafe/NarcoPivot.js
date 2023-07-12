@@ -15,16 +15,16 @@
  * 
  *      <DisablePivot>
  * 
- * You can also designate a switch that enables strafing when ON, and disables strafing when OFF.
+ * You can also designate a switch that enables pivoting when ON, and disables pivoting when OFF.
  * See the "Pivot Switch" param for details.
  *
  * @param Pivot Button
- * @desc Button name to set for strafing.
+ * @desc Button name to set for pivoting.
  * @default pageup
  *
  * @param Pivot Switch
- * @desc Switch ID for enabling/disabling strafing.
- *  0 to always enable strafing.
+ * @desc Switch ID for enabling/disabling pivoting.
+ *  0 to always enable pivoting.
  * @default 0
  */
 
