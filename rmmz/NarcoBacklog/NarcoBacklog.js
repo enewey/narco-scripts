@@ -4,18 +4,25 @@
  * @author Erich Newey
  *
  * @help NarcoBacklog.js
- *
- * Plugin Command:
- *   NarcoBacklog open          # Open the backlog screen.
- *   NarcoBacklog on            # Record incoming messages to the backlog 
- *                                (On is the default state).
- *   NarcoBacklog off           # Stop recording incoming messages to the backlog.
- *   NarcoBacklog setName Bob   # Overrides the name recorded to be `Bob` until 
- *                                next portrait is drawn or cleared.
- *   NarcoBacklog clearName     # Clear the currently set name, recording the next 
- *                                messages as 'System'.
- *   NarcoBacklog clear         # Erase all messages in the message backlog.
  * 
+ * This plugin adds a Backlog feature.
+ * It will record all messages displayed with the Show Message command, and add a 
+ *  command to open a backlog window, which displays all text in the backlog that 
+ *  can be scrolled through.
+ * The backlog will also keep track of who is talking. There are commands to set
+ *  and unset the current speaker, and there is a feature that will automatically
+ *  parse the speaker's name from a displayed picture.
+ * 
+ * 
+ * Recording can be turned off and on.
+ *
+ * Plugin Commands:
+ *   NarcoBacklog open      
+ *   NarcoBacklog on            
+ *   NarcoBacklog off
+ *   NarcoBacklog setName Bob   
+ *   NarcoBacklog clearName    
+ *   NarcoBacklog clear         
  * 
  * @command open
  * @text Open Backlog
@@ -31,7 +38,8 @@
  * 
  * @command setName
  * @text Set Name
- * @desc Overrides the name for the next batch of recorded messages, until a portrait is displayed or name is cleared.
+ * @desc Overrides the name for the next batch of recorded messages, 
+ *       until a portrait is displayed or name is cleared.
  * 
  * @arg name
  * @type string
@@ -48,67 +56,70 @@
  * 
  * ======== 
  * 
- * @param Portrait File Suffixes
+ * @param portraitSuffixes
+ * @text Portrait File Suffixes
  * @desc Suffixes of filenames use for portraits. 
- *  For example, with file names "Doug_Portrait" and "Doug_OldPortrait" and suffixes "_Portrait,_OldPortrait", 
+ *  For example, with file names "Doug_Portrait" and "Doug_OldPortrait" 
+ *  and suffixes "_Portrait" and "_OldPortrait", 
  *  the character's name would be recognized as "Doug".
- * @default Textbox,FutureTextbox
+ * @type string[]
  * 
- * @param Reverse Chronologically
+ * @param reverseChronologically
+ * @text Reverse Chronologically
  * @desc Determines order that backlog is displayed.
- *  1 will display backlog in reverse chronological order (most recent message first)
- *  0 will display backlog in chronological order (oldest message first)
- * @default 1
+ *  If true, will display most recent messages first.
+ * @type boolean
+ * @default true
  * 
- * @param System Message Label
+ * @param systemLabel
+ * @text System Message Label
  * @desc Customize how "system" (i.e. messages with no associated name) appear.
+ * @type string
  * @default System
  * 
- * @param Name Colors
- * @desc Comma-separated list of names to color codes.
- * Example: 
- *    Alice:1,Bob:3,System:8
- * Here, Alice's name will display in the backlog with the color `1`, i.e. as \c[1]Alice\c[0]:
- * Bob will be color 3
- * System will be color 8
- * @default System:8
+ * @param nameColors
+ * @text Name Colors
+ * @desc List of names to color codes.
+ *  If the name matches the "System Message Label", it will color that.
+ * @type struct<nameColor>[]
  * 
- * @param Default Name Color
+ * @param defaultNameColor
+ * @text Default Name Color
  * @desc Color code for names that do not appear in the "Name Colors" param.
+ * @type number
  * @default 6
+ * @parent nameColors
+*/
+
+/*~struct~nameColor:
+*
+* @param name
+* @text Name 
+* @desc The displayed name that should be colorized.
+* @type string
+*
+* @param color
+* @text Color
+* @desc The numeric system color to use.
+* @type number
+* @default 0
+* ......
 */
 
 var Narcodis = Narcodis || {};
 Narcodis.BACKLOG = {};
 Narcodis.BACKLOG.Parameters = PluginManager.parameters('NarcoBacklog');
-Narcodis.BACKLOG.Reversed = Boolean(Number(Narcodis.BACKLOG.Parameters["Reverse Chronologically"]));
-Narcodis.BACKLOG.SystemLabel = String(Narcodis.BACKLOG.Parameters["System Message Label"]);
-Narcodis.BACKLOG.DefaultColorCode = Number(Narcodis.BACKLOG.Parameters["Default Name Color"]);
-
-Narcodis.BACKLOG.ColorCodes = {}
-try {
-    Narcodis.BACKLOG.__name_split = String(Narcodis.BACKLOG.Parameters["Name Colors"]).split(',');
-    for (var n of Narcodis.BACKLOG.__name_split) {
-        let s = n.split(':');
-        if (s.length != 2) {
-            throw "encountered bad name color code: " + s;
-        }
-        Narcodis.BACKLOG.ColorCodes[s[0]] = s[1];
-    }
-} catch (e) {
-    console.error("Error parsing Name Colors parameter", { error: e });
-}
-
-Narcodis.BACKLOG.PortraitSuffixes = []
-try {
-    Narcodis.BACKLOG.PortraitSuffixes = 
-        String(Narcodis.BACKLOG.Parameters["Portrait File Suffixes"])
-        .split(',')
-        .map(s => s.trim())
-        .sort((a,b) => b.length-a.length);
-} catch (e) {
-    console.error("Error parsing Portrait Suffixes parameter", { error: e });
-}
+Narcodis.BACKLOG.Reversed = Boolean(Number(Narcodis.BACKLOG.Parameters.reverseChronologically));
+Narcodis.BACKLOG.SystemLabel = String(Narcodis.BACKLOG.Parameters.systemLabel);
+Narcodis.BACKLOG.DefaultColorCode = Number(Narcodis.BACKLOG.Parameters.defaultNameColor);
+Narcodis.BACKLOG.ColorCodes = JSON.parse(Narcodis.BACKLOG.Parameters.nameColors)
+    .map(JSON.parse)
+    .reduce((acc, next) => {
+        acc[next['name']] = Number(next['color']);
+        return acc;
+    }, {});
+Narcodis.BACKLOG.PortraitSuffixes = JSON.parse(Narcodis.BACKLOG.Parameters.portraitSuffixes)
+    .sort((a,b) => b.length - a.length);
 
 Narcodis.BACKLOG.ParseNameFromSuffixes = function(name) {
     for (let i=0; i<Narcodis.BACKLOG.PortraitSuffixes.length; i++) {
@@ -119,7 +130,6 @@ Narcodis.BACKLOG.ParseNameFromSuffixes = function(name) {
     }
     return null;
 };
-
 
 Narcodis.BACKLOG.$gameBacklog = null;
 
