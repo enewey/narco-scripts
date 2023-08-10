@@ -42,12 +42,20 @@
  * @desc List of names to color codes.
  *  If the name matches the "System Message Label", it will color that.
  * @type struct<nameColor>[]
+ * @default []
  * 
  * @param defaultNameColor
  * @text Default Name Color
  * @desc Color code for names that do not appear in the "Name Colors" param.
  * @type number
  * @default 6
+ * @parent nameColors
+ * 
+ * @param nameOverrides
+ * @text Name Overrides
+ * @desc List of filenames whose display name should be forcibly overridden.
+ * @type struct<nameOverride>[]
+ * @default []
 */
 
 /*~struct~nameColor:
@@ -65,6 +73,22 @@
 * ......
 */
 
+/*~struct~nameOverride:
+*
+* @param portraitName
+* @text Image Filename
+* @desc The image filename whose prefix should be ignored
+    Do not include file extension. 
+    For example, if the image is "JohnTextbox.png", just put "JohnTextbox"
+* @type string
+*
+* @param displayName
+* @text Display Name
+* @desc The name to display when the given filename is displayed
+* @type string
+* ......
+*/
+
 var Narcodis = Narcodis || {};
 Narcodis.BACKLOG = {};
 Narcodis.BACKLOG.Parameters = PluginManager.parameters('NarcoBacklog');
@@ -78,10 +102,21 @@ Narcodis.BACKLOG.ColorCodes = JSON.parse(Narcodis.BACKLOG.Parameters.nameColors)
         acc[next['name']] = Number(next['color']);
         return acc;
     }, {});
+Narcodis.BACKLOG.NameOverrides = JSON.parse(Narcodis.BACKLOG.Parameters.nameOverrides)
+    .map(JSON.parse)
+    .reduce((acc, next) => {
+        acc[next['portraitName']] = next['displayName'];
+        return acc;
+    }, {});
 Narcodis.BACKLOG.PortraitSuffixes = JSON.parse(Narcodis.BACKLOG.Parameters.portraitSuffixes)
     .sort((a,b) => b.length - a.length);
 
 Narcodis.BACKLOG.ParseNameFromSuffixes = function(name) {
+    console.log("parsing filename", name)
+    if (Narcodis.BACKLOG.NameOverrides[name]) {
+        return Narcodis.BACKLOG.NameOverrides[name];
+    }
+
     for (let i=0; i<Narcodis.BACKLOG.PortraitSuffixes.length; i++) {
         let suffix = Narcodis.BACKLOG.PortraitSuffixes[i];
         if (name.endsWith(suffix)) {
@@ -90,7 +125,6 @@ Narcodis.BACKLOG.ParseNameFromSuffixes = function(name) {
     }
     return null;
 };
-
 
 Narcodis.BACKLOG.$gameBacklog = null;
 
