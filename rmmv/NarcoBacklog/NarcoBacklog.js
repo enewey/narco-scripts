@@ -425,7 +425,7 @@ Window_Narco_Backlog.prototype.drawTextInBounds = function(textList, x, y) {
     }
 
     const end = Math.min(textList.length, it + 4 + Math.trunc(this._height / this.lineHeight()));
-    const sl = textList.slice(it, end).join("\n");
+    const sl = textList.slice(it, end).join("\n").replace(/\\(\{|\})/g, "");
     console.log("drawing lines", {sl});
     this.drawTextEx(sl, x, y);
     
