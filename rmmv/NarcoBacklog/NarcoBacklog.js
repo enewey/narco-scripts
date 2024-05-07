@@ -92,9 +92,11 @@
 var Narcodis = Narcodis || {};
 Narcodis.BACKLOG = {};
 Narcodis.BACKLOG.Parameters = PluginManager.parameters('NarcoBacklog');
-Narcodis.BACKLOG.Reversed = Boolean(Number(Narcodis.BACKLOG.Parameters.reverseChronologically));
+Narcodis.BACKLOG.Reversed = Narcodis.BACKLOG.Parameters.reverseChronologically === "true";
 Narcodis.BACKLOG.SystemLabel = String(Narcodis.BACKLOG.Parameters.systemLabel);
 Narcodis.BACKLOG.DefaultColorCode = Number(Narcodis.BACKLOG.Parameters.defaultNameColor);
+
+console.log(Narcodis.BACKLOG);
 
 Narcodis.BACKLOG.ColorCodes = JSON.parse(Narcodis.BACKLOG.Parameters.nameColors)
     .map(JSON.parse)
@@ -139,7 +141,7 @@ Narcodis.BACKLOG.$gameBacklog = null;
     
     (function(alias) {
         Game_Screen.prototype.showPicture = function(pictureId, name, _origin, _x, _y, _scaleX, _scaleY, _opacity, _blendMode) {
-            let n = Narcodis.BACKLOG.ParseNameFromSuffixes(name)
+            let n = Narcodis.BACKLOG.ParseNameFromSuffixes(name);
             if (n) { 
                 Narcodis.BACKLOG.$gameBacklog.set_current(pictureId, n); 
             }
@@ -155,6 +157,13 @@ Narcodis.BACKLOG.$gameBacklog = null;
             alias.apply(this, arguments);
         };
     })(Game_Screen.prototype.erasePicture);
+
+    (function(alias) {
+        Window_Message.prototype.terminateMessage = function() {
+            Narcodis.BACKLOG.$gameBacklog.reset_color_on_last();
+            alias.apply(this, arguments);
+        };
+    })(Window_Message.prototype.terminateMessage);
 
 
     // plugin commands
@@ -245,6 +254,15 @@ Game_Narco_Backlog.prototype.push_message = function(message) {
     }
 };
 
+Game_Narco_Backlog.prototype.reset_color_on_last = function() {
+    const last = this._data.pop();
+    if (!last.message.endsWith('\\c[0]')) {
+        last.message = `${last.message}\\c[0]`;
+    }
+    this._data.push(last);
+
+}
+
 Game_Narco_Backlog.prototype.set_active = function(b) {
     this._active = !!b;
 };
@@ -290,6 +308,8 @@ Scene_Narco_Backlog.prototype.create = function () {
             messages.reverse();
         }
     }
+
+    console.log({data: Narcodis.BACKLOG.$gameBacklog.data()});
 
     this._dataWindow = new Window_Narco_Backlog(0, 0, Graphics.boxWidth, Graphics.height, messages);
     this.addWindow(this._dataWindow);
@@ -361,16 +381,53 @@ Window_Narco_Backlog.prototype.drawAllItems = function () {
         return;
     }
 
+    let drawingStarted = false;
+
     for (var msg of this._messages) {
+        let drawn;
         if (msg.name !== name) {
             name = msg.name
             y += this._messageGap;
             let color = (name in Narcodis.BACKLOG.ColorCodes) ? Narcodis.BACKLOG.ColorCodes[name] : Narcodis.BACKLOG.DefaultColorCode;
-            this.drawTextEx(`\\c[${color}]${msg.name}\\c[0]:`, 0, y);
+            drawn = this.drawTextInBounds([`\\c[${color}]${msg.name}\\c[0]:`], 0, y);
+            if (!drawn && drawingStarted) {
+                break;
+            }
+            drawingStarted = drawn;
             y += this.lineHeight();
-        } 
-        let joined = msg.texts.join("\n");
-        this.drawTextEx(joined, 24, y);
-        y += this.lineHeight() * msg.texts.length;     
+        }
+        // let joined = msg.texts.join("\n");
+        // this.drawTextEx(joined, 24, y);
+        drawn = this.drawTextInBounds(msg.texts, 24, y);
+        if (!drawn && drawingStarted) {
+            break;
+        }
+        drawingStarted = drawn;
+        y += this.lineHeight() * msg.texts.length;
     }
+};
+
+Window_Narco_Backlog.prototype.drawTextInBounds = function(textList, x, y) {
+    // attempt to draw below window fails
+    if (y > this._height) {
+        return false;
+    }
+
+    let it = 0;
+    while (y < -(this.lineHeight() * 4) && it < textList.length) {
+        it++;
+        y += this.lineHeight();
+    }
+
+    // none of the lines fall within the window boundaries
+    if (y < -(this.lineHeight() * 4)) {
+        return false;
+    }
+
+    const end = Math.min(textList.length, it + 4 + Math.trunc(this._height / this.lineHeight()));
+    const sl = textList.slice(it, end).join("\n");
+    console.log("drawing lines", {sl});
+    this.drawTextEx(sl, x, y);
+    
+    return true;
 };
